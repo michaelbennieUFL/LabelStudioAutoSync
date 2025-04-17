@@ -1,0 +1,14 @@
+services:
+  storage-sync:
+    build: .
+    image: storage-sync:latest
+    container_name: storage-sync
+    environment:
+      LABEL_STUDIO_URL: https://your‑ls.example.com
+      API_KEY: your-token
+    volumes:
+      - ./storage_config.json:/app/storage_config.json
+    tty: true           # keeps ansi colors & keys working
+    stdin_open: true    # so you can `docker attach` and use the TUI
+    command: tail -f /dev/null   # cron only; attach later for TUI
+    restart: unless-stopped
