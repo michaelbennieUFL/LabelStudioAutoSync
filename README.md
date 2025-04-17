@@ -1,6 +1,9 @@
 # LabelStudioAutoSync
 
+![圖片](https://github.com/user-attachments/assets/09ec3702-d0fd-4b10-b3b8-55d9f669d0e9)
+
 This application provides an interactive Text User Interface (TUI) for managing export storages in Label Studio projects.
+
 
 ## Features
 
