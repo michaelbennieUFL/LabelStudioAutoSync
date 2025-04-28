@@ -76,37 +76,56 @@ def get_all_storages():
         for s in load_config()
     }
     result = []
+
+    # List of storage types to support
+    storage_types = ['gcs', 's3', 'local', 'azure', 'redis', 's3s']
+
     for proj in ls.projects.list():
-        for st in ls.export_storage.gcs.list(project=proj.id):
-            key = f"{proj.id}_{st.id}"
-            rec = {
-                'project_id'      : proj.id,
-                'project_name'    : proj.title,
-                'storage_id'      : st.id,
-                'storage_title'   : st.title,
-                'update_frequency': None,
-                'frequency_unit'  : None,
-                'last_synced'     : None,
-                'next_sync'       : None
-            }
-            if key in saved:
-                rec.update(saved[key])
-            result.append(rec)
+        for storage_type in storage_types:
+            # Get the appropriate storage list method based on storage type
+            storage_list_method = getattr(ls.export_storage, storage_type).list
+
+            try:
+                for st in storage_list_method(project=proj.id):
+                    key = f"{proj.id}_{st.id}"
+                    rec = {
+                        'project_id'      : proj.id,
+                        'project_name'    : proj.title,
+                        'storage_id'      : st.id,
+                        'storage_title'   : st.title,
+                        'storage_type'    : storage_type,  # Store the storage type
+                        'update_frequency': None,
+                        'frequency_unit'  : None,
+                        'last_synced'     : None,
+                        'next_sync'       : None
+                    }
+                    if key in saved:
+                        rec.update(saved[key])
+                        # Ensure storage_type is set even for existing records
+                        if 'storage_type' not in rec or not rec['storage_type']:
+                            rec['storage_type'] = storage_type
+                    result.append(rec)
+            except Exception as e:
+                # Skip if this storage type is not available or there's an error
+                continue
+
     return result
 
 # ────────────────────────────── UI drawing ───────────────────────────────────
 def display_storages(storages, sel=0, msg=''):
     print(term.clear)
     print(term.bold_white_on_blue(term.center('=== EXPORT STORAGES ===')))
-    print(term.bold('ID | Project | Storage | Freq | Last Sync | Next Sync'))
+    print(term.bold('ID | Project | Storage (Type) | Freq | Last Sync | Next Sync'))
     print(term.bold('-'*term.width))
     for i, s in enumerate(storages, 1):
         freq = (
             f"{s['update_frequency']} {s['frequency_unit']}"
             if s['update_frequency'] else 'Not set'
         )
+        # Get storage type, default to 'gcs' for backward compatibility
+        storage_type = s.get('storage_type', 'gcs')
         line = (
-            f"{i} | {s['project_name']} | {s['storage_title']} | "
+            f"{i} | {s['project_name']} | {s['storage_title']} ({storage_type}) | "
             f"{freq:<14} | {s['last_synced'] or 'Never':<16} | "
             f"{s['next_sync'] or 'N/A'}"
         )
@@ -123,7 +142,15 @@ def display_storages(storages, sel=0, msg=''):
 def sync_storage(idx, storages):
     s = storages[idx]
     try:
-        ls.export_storage.gcs.sync(id=s['storage_id'])
+        # Get the storage type, default to 'gcs' for backward compatibility
+        storage_type = s.get('storage_type', 'gcs')
+
+        # Get the appropriate sync method based on storage type
+        storage_sync_method = getattr(ls.export_storage, storage_type).sync
+
+        # Call the appropriate sync method
+        storage_sync_method(id=s['storage_id'])
+
         now = datetime.now()
         s['last_synced'] = now.strftime('%Y-%m-%d %H:%M')
         if s['update_frequency']:
@@ -136,7 +163,7 @@ def sync_storage(idx, storages):
             )
             s['next_sync'] = (now + delta).strftime('%Y-%m-%d %H:%M')
         save_config(storages)
-        return 'Sync OK'
+        return f'Sync OK ({storage_type})'
     except Exception as exc:
         return f'Error: {exc}'
 
